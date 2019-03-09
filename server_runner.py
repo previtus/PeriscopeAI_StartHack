@@ -16,6 +16,11 @@ from inference_utils import caption_generator
 from inference_utils import vocabulary
 from timeit import default_timer as timer
 import io
+from pydub import AudioSegment
+
+from text_translation_Azure_1 import translate
+from text_to_speech_Azure_2 import texttospeech
+
 
 # Thanks to the tutorial at: https://blog.keras.io/building-a-simple-keras-deep-learning-rest-api.html
 
@@ -45,6 +50,16 @@ class Server(object):
         ##vocab_file = "/media/vitek/VitekDrive_I/2019_Projects/AI_Periscope/im2txt_models/upload/word_counts.txt"
 
         self.load_model_im2txt(checkpoint_path, vocab_file)
+
+        """
+        from cStringIO import StringIO
+        buf = StringIO()
+        response = flask.make_response(buf.getvalue())
+        buf.close()
+        response.headers['Content-Type'] = 'audio/wav'
+        response.headers['Content-Disposition'] = 'attachment; filename=sound.wav'
+        return response
+        """
 
     def load_model_im2txt(self, checkpoint_path, vocab_file):
         global g
@@ -131,6 +146,14 @@ class Server(object):
 
         return response
 
+@app.route('/speech.wav', methods=['GET', 'POST'])
+def speechwav():
+    filename = "speech.wav"
+    return flask.send_from_directory(directory="", filename=filename)
+@app.route('/speech.mp3', methods=['GET', 'POST'])
+def speechmp3():
+    filename = "speech.mp3"
+    return flask.send_from_directory(directory="", filename=filename)
 
 @app.route("/handshake", methods=["GET","POST"])
 def handshake():
@@ -158,9 +181,182 @@ def handshake():
     # return the data dictionary as a JSON response
     return flask.jsonify(data)
 
+### PYTHON CLIENT >>>>
+from PIL import Image
+from keras.preprocessing.image import img_to_array
+from keras.applications import imagenet_utils
+
+def prepare_image(image, target):
+    # if the image mode is not RGB, convert it
+    if image.mode != "RGB":
+        image = image.convert("RGB")
+
+    # resize the input image and preprocess it
+    image = image.resize(target)
+    image = img_to_array(image)
+    image = np.expand_dims(image, axis=0)
+    image = imagenet_utils.preprocess_input(image)
+
+    # return the processed image
+    return image
+
+@app.route("/python_binding", methods=["GET","POST"])
+def python_binding():
+    start = timer()
+
+    data = {"success": False}
+    if flask.request.method == "POST":
+        uids = []
+        imgs_data = []
+
+        print("flask.request.files",flask.request.files)
+        print("flask.request.values", flask.request.values)
+
+        t_start_decode = timer()
+        for key in flask.request.files:
+            im_data = flask.request.files[key].read()
+
+            imgs_data.append(im_data)
+            uids.append(key)
+
+        images = pool.map(lambda i: (
+            cv2.imdecode(np.asarray(bytearray(i), dtype=np.uint8), 1)
+        ), imgs_data)
+
+        t_start_eval = timer()
+        print("Received",len(images),"images (Decoded in",(t_start_eval-t_start_decode),".", uids, [i.shape for i in images])
+
+        # indicate that the request was a success
+        data["success"] = True
+
+    image = images[0]
+    lang_code = flask.request.values["language"]
+
+    print(image.shape)
+    print("lang_code", lang_code)
+
+    str_description = ""
+    try:
+        # resize?
+        cv2.imwrite("tmp.jpg",image) ## hahahaaack
+
+        input_files = "tmp.jpg"
+        images = []
+        with tf.gfile.GFile(input_files, "rb") as f:
+            image = f.read()
+        images.append(image)
+
+        str_description = server.run_model_on_images(images)
+        success = True
+
+    except Exception as e:
+        print("Exception caught!!!", e)
+
+
+    # language stuffs
+    if lang_code is not "en":
+        translated = translate(str_description, lang_code)
+
+        print("Text translation >", translated)
+
+        translated_text = (translated[0]["translations"][0]["text"])
+        print(translated_text)
+
+        print("Saving audio")
+        texttospeech(translated_text, lang_code)
+
+        str_description = translated_text
+
+    wav_filepath = "speech.wav"
+    mp3_filepath = "speech.mp3"
+    sound = AudioSegment.from_wav(wav_filepath)
+    sound.export(mp3_filepath, format="mp3")
+
+    #return flask.jsonify(data)
+    #mp3_filepath = "mini.mp3"
+    #response = flask.make_response(flask.send_file(mp3_filepath))
+    #response.headers['Location'] = str ### haaaaaack
+    #return response
+
+    end = timer()
+    time = (end - start)
+
+    data = {"success": success, "str": str_description, "internal_time": time}
+
+
+    return flask.jsonify(data)
+
+
+
+    data = {"success": False}
+
+    print("flask.request.values",flask.request.values)
+    print("flask.request.files",flask.request.files)
+
+    # ensure an image was properly uploaded to our endpoint
+    if flask.request.method == "POST":
+        if flask.request.files.get("image"):
+            # read the image in PIL format
+            print("got image")
+            image = flask.request.files["image"].read()
+            print("image",image)
+            image = Image.open(io.BytesIO(image))
+            print("image", image)
+            # preprocess the image and prepare it for classification
+            image = prepare_image(image, target=(224, 224))
+            print(image.size)
+
+    # return the data dictionary as a JSON response
+    return flask.jsonify(data)
+
+    start = timer()
+
+    input_files = "/home/vitek/Vitek/Projects_local_for_ubuntu/AI_Periscope/models/im2txt/im2txt/img3.jpg"
+    data = {"success": True}
+    data['language'] = "eng"
+    data["internal_time"] = 0.01337080085
+    str = server.run_model_on_image_paths(input_files)
+    data["str"] = str
+
+    lang_code = "zh" #"de"
+
+    # language stuffs
+    if lang_code is not "en":
+        translated = translate(str, lang_code)
+
+        print("Text translation >", translated)
+
+        translated_text = (translated[0]["translations"][0]["text"])
+        print(translated_text)
+
+        print("Saving audio")
+        texttospeech(translated_text, lang_code)
+
+        str = translated_text
+
+    wav_filepath = "speech.wav"
+    mp3_filepath = "speech.mp3"
+    sound = AudioSegment.from_wav(wav_filepath)
+    sound.export(mp3_filepath, format="mp3")
+
+    #return flask.jsonify(data)
+    end = timer()
+
+    response = flask.make_response(flask.send_file(mp3_filepath))
+    response.headers['Location'] = str ### haaaaaack
+
+    time_spent = end - start
+    print("Evaluation took: ", time_spent)
+
+    return response
+
+
+### FIRST VERSION >>>>
+
 @app.route("/evaluate_image_local", methods=["GET","POST"])
 def evaluate_image_local():
     input_files = "/media/vitek/VitekDrive_I/2019_Projects/AI_Periscope/images/img3.jpg"
+    input_files = "/home/vitek/Vitek/Projects_local_for_ubuntu/AI_Periscope/models/im2txt/im2txt/img3.jpg"
     data = {"success": True}
     data['language'] = "eng"
     data["internal_time"] = 0.01337080085
@@ -168,6 +364,50 @@ def evaluate_image_local():
     data["str"] = str
 
     return flask.jsonify(data)
+
+@app.route("/demo_stuffs", methods=["GET","POST"])
+def demo_stuffs():
+    start = timer()
+
+    input_files = "/home/vitek/Vitek/Projects_local_for_ubuntu/AI_Periscope/models/im2txt/im2txt/img3.jpg"
+    data = {"success": True}
+    data['language'] = "eng"
+    data["internal_time"] = 0.01337080085
+    str = server.run_model_on_image_paths(input_files)
+    data["str"] = str
+
+    lang_code = "zh" #"de"
+
+    # language stuffs
+    if lang_code is not "en":
+        translated = translate(str, lang_code)
+
+        print("Text translation >", translated)
+
+        translated_text = (translated[0]["translations"][0]["text"])
+        print(translated_text)
+
+        print("Saving audio")
+        texttospeech(translated_text, lang_code)
+
+        str = translated_text
+
+    wav_filepath = "speech.wav"
+    mp3_filepath = "speech.mp3"
+    sound = AudioSegment.from_wav(wav_filepath)
+    sound.export(mp3_filepath, format="mp3")
+
+    #return flask.jsonify(data)
+    end = timer()
+
+    response = flask.make_response(flask.send_file(mp3_filepath))
+    response.headers['Location'] = str ### haaaaaack
+
+    time_spent = end - start
+    print("Evaluation took: ", time_spent)
+
+    return response
+
 
 @app.route("/debug", methods=["GET","POST"])
 def debug():
@@ -177,13 +417,8 @@ def debug():
     print("form", flask.request.form)
     print("data", flask.request.data)
     print("files", flask.request.files)
-    """
-    values: CombinedMultiDict([ImmutableMultiDict([]), ImmutableMultiDict([('language', 'eng')])])
-    args: ImmutableMultiDict([])
-    form: ImmutableMultiDict([('language', 'eng')])
-    data: b''
-    """
 
+    """
     file = flask.request.files['file']
 
     in_memory_file = io.BytesIO()
@@ -192,20 +427,57 @@ def debug():
     color_image_flag = 1
     img = cv2.imdecode(data, color_image_flag)
     print("Received image:", img.shape)
-
+    """
     data = {"success": True}
 
     return flask.jsonify(data)
 
+### FIRST VERSION >>>>
 
-@app.route("/evaluate_image2", methods=["GET","POST"])
-def evaluate_image2():
+@app.route("/eval_str", methods=["GET","POST"])
+def eval_str():
     str = ""
     start = timer()
     success = False
-    data = {}
+    #data = {"3":"eng"}
 
     print("Handshake!")
+    vals = flask.request.values
+    print("values: ", vals)
+    form = flask.request.form
+    print("form: ", form)
+
+    """
+    lang_code = "en"
+    try:
+        # awfully hacky ~-~-~-~
+
+        d = flask.request.form.to_dict()
+        #print("d",d)
+        #d {'Language': '{"selectedlanguage":"Mandarin"}'}
+
+        lang = d['Language']
+        print("Selected language:", lang)
+        #lang_selected = lang['selectedlanguage']
+        #{"selectedlanguage":"English"}
+        lang_selected = lang[21:-2] # is str now...
+        print("Selected language:", lang_selected)
+
+        if lang_selected == "ul":
+            print("Is NULL!")
+            lang_selected = "English"
+        # "German", "Mandarin", "English"
+
+        # language to Microsoft code
+        if lang_selected == "German":
+            lang_code = "de"
+        elif lang_selected == "Mandarin":
+            lang_code = "zh"
+
+    except Exception as e:
+        print("Exception caught reading language...", e)
+    """
+
     try:
 
         file = flask.request.files['file']
@@ -231,7 +503,145 @@ def evaluate_image2():
     except Exception as e:
         print("Exception caught!!!", e)
 
+    """
+    # language stuffs
+    if lang_code is not "en":
+        translated = translate(str, lang_code)
+
+        print("Text translation >", translated)
+
+        translated_text = (translated[0]["translations"][0]["text"])
+        print(translated_text)
+
+        print("Saving audio")
+        texttospeech(translated_text, lang_code)
+
+        str = translated_text
+
+    wav_filepath = "speech.wav"
+    mp3_filepath = "speech.mp3"
+    sound = AudioSegment.from_wav(wav_filepath)
+    sound.export(mp3_filepath, format="mp3")
+
+    #return flask.jsonify(data)
+    """
     end = timer()
+
+    mp3_filepath = "mini.mp3"
+    response = flask.make_response(flask.send_file(mp3_filepath))
+    response.headers['Location'] = str ### haaaaaack
+
+    return response
+
+
+@app.route("/eval", methods=["GET","POST"])
+def eval():
+    str = ""
+    start = timer()
+    success = False
+    #data = {"3":"eng"}
+
+    print("Handshake!")
+    vals = flask.request.values
+    print("values: ", vals)
+    form = flask.request.form
+    print("form: ", form)
+
+    """
+    values: CombinedMultiDict([ImmutableMultiDict([]), ImmutableMultiDict([('language', 'eng')])])
+    args: ImmutableMultiDict([])
+    form: ImmutableMultiDict([('language', 'eng')])
+    data: b''
+    """
+
+    lang_code = "en"
+    try:
+        # awfully hacky ~-~-~-~
+
+        d = flask.request.form.to_dict()
+        #print("d",d)
+        #d {'Language': '{"selectedlanguage":"Mandarin"}'}
+
+        lang = d['Language']
+        print("Selected language:", lang)
+        #lang_selected = lang['selectedlanguage']
+        #{"selectedlanguage":"English"}
+        lang_selected = lang[21:-2] # is str now...
+        print("Selected language:", lang_selected)
+
+        if lang_selected == "ul":
+            print("Is NULL!")
+            lang_selected = "English"
+        # "German", "Mandarin", "English"
+
+        # language to Microsoft code
+        if lang_selected == "German":
+            lang_code = "de"
+        elif lang_selected == "Mandarin":
+            lang_code = "zh"
+
+    except Exception as e:
+        print("Exception caught reading language...", e)
+
+    try:
+
+        file = flask.request.files['file']
+
+        in_memory_file = io.BytesIO()
+        file.save(in_memory_file)
+        data = np.fromstring(in_memory_file.getvalue(), dtype=np.uint8)
+        color_image_flag = 1
+        img = cv2.imdecode(data, color_image_flag)
+
+        # resize?
+        cv2.imwrite("tmp.jpg",img) ## hahahaaack
+
+        input_files = "tmp.jpg"
+        images = []
+        with tf.gfile.GFile(input_files, "rb") as f:
+            image = f.read()
+        images.append(image)
+
+        str = server.run_model_on_images(images)
+        success = True
+
+    except Exception as e:
+        print("Exception caught!!!", e)
+
+
+    # language stuffs
+    if lang_code is not "en":
+        translated = translate(str, lang_code)
+
+        print("Text translation >", translated)
+
+        translated_text = (translated[0]["translations"][0]["text"])
+        print(translated_text)
+
+        print("Saving audio")
+        texttospeech(translated_text, lang_code)
+
+        str = translated_text
+
+    wav_filepath = "speech.wav"
+    mp3_filepath = "speech.mp3"
+    sound = AudioSegment.from_wav(wav_filepath)
+    sound.export(mp3_filepath, format="mp3")
+
+    #return flask.jsonify(data)
+    end = timer()
+
+    response = flask.make_response(flask.send_file(mp3_filepath))
+    response.headers['Location'] = str ### haaaaaack
+
+    return response
+
+    import json
+    response = app.response_class(response=json.dumps(data),
+                                  status=200,
+                                  mimetype='application/json')
+    return response
+
 
     #data['language'] = "eng"
     #data["success"] = success
