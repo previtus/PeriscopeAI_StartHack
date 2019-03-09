@@ -15,6 +15,7 @@ import inference_wrapper
 from inference_utils import caption_generator
 from inference_utils import vocabulary
 from timeit import default_timer as timer
+import io
 
 # Thanks to the tutorial at: https://blog.keras.io/building-a-simple-keras-deep-learning-rest-api.html
 
@@ -24,6 +25,8 @@ model = None
 restore_fn = None
 vocab = None
 pool = ThreadPool()
+
+# Ps: the localhost can be exposed to the world with ngrok "./ngrok http 5000"
 
 class Server(object):
     """
@@ -36,6 +39,10 @@ class Server(object):
         ai_periscope_path = "/media/vitek/VitekDrive_I/2019_Projects/AI_Periscope"
         checkpoint_path = ai_periscope_path+"/im2txt_models/Pretrained-Show-and-Tell-model/model.ckpt-2000000"
         vocab_file = ai_periscope_path+"/im2txt_models/Pretrained-Show-and-Tell-model/word_counts.txt"
+
+        ## nope these versions are sadly not working...
+        ##checkpoint_path = "/media/vitek/VitekDrive_I/2019_Projects/AI_Periscope/im2txt_models/upload/model_conv.ckpt-3000000"
+        ##vocab_file = "/media/vitek/VitekDrive_I/2019_Projects/AI_Periscope/im2txt_models/upload/word_counts.txt"
 
         self.load_model_im2txt(checkpoint_path, vocab_file)
 
@@ -85,9 +92,16 @@ class Server(object):
                     sentence = [vocab.id_to_word(w) for w in caption.sentence[1:-1]]
                     sentence = " ".join(sentence)
                     print("  %d) %s (p=%f)" % (i, sentence, math.exp(caption.logprob)))
-                    response += "  %d) %s (p=%f)" % (i, sentence, math.exp(caption.logprob))
+                    str_formating = sentence
+                    if str_formating[-2:] == " .":
+                        str_formating = str_formating[:-2] + "."
 
-        return response
+                    str_formating = str_formating.capitalize()
+                    response += "%s" % (str_formating)
+
+                    break
+
+                return response
 
     def run_model_on_images(self, images):
         response = ""
@@ -105,7 +119,15 @@ class Server(object):
                     sentence = [vocab.id_to_word(w) for w in caption.sentence[1:-1]]
                     sentence = " ".join(sentence)
                     print("  %d) %s (p=%f)" % (i, sentence, math.exp(caption.logprob)))
-                    response += "  %d) %s (p=%f)" % (i, sentence, math.exp(caption.logprob))
+
+                    str_formating = sentence
+                    if str_formating[-2:] == " .":
+                        str_formating = str_formating[:-2]+"."
+
+                    str_formating = str_formating.capitalize()
+                    response += "%s" % (str_formating)
+
+                    break
 
         return response
 
@@ -139,8 +161,93 @@ def handshake():
 @app.route("/evaluate_image_local", methods=["GET","POST"])
 def evaluate_image_local():
     input_files = "/media/vitek/VitekDrive_I/2019_Projects/AI_Periscope/images/img3.jpg"
+    data = {"success": True}
+    data['language'] = "eng"
+    data["internal_time"] = 0.01337080085
     str = server.run_model_on_image_paths(input_files)
-    return str
+    data["str"] = str
+
+    return flask.jsonify(data)
+
+@app.route("/debug", methods=["GET","POST"])
+def debug():
+    print("DEBUG")
+    print("values", flask.request.values)
+    print("args", flask.request.args)
+    print("form", flask.request.form)
+    print("data", flask.request.data)
+    print("files", flask.request.files)
+    """
+    values: CombinedMultiDict([ImmutableMultiDict([]), ImmutableMultiDict([('language', 'eng')])])
+    args: ImmutableMultiDict([])
+    form: ImmutableMultiDict([('language', 'eng')])
+    data: b''
+    """
+
+    file = flask.request.files['file']
+
+    in_memory_file = io.BytesIO()
+    file.save(in_memory_file)
+    data = np.fromstring(in_memory_file.getvalue(), dtype=np.uint8)
+    color_image_flag = 1
+    img = cv2.imdecode(data, color_image_flag)
+    print("Received image:", img.shape)
+
+    data = {"success": True}
+
+    return flask.jsonify(data)
+
+
+@app.route("/evaluate_image2", methods=["GET","POST"])
+def evaluate_image2():
+    str = ""
+    start = timer()
+    success = False
+    data = {}
+
+    print("Handshake!")
+    try:
+
+        file = flask.request.files['file']
+
+        in_memory_file = io.BytesIO()
+        file.save(in_memory_file)
+        data = np.fromstring(in_memory_file.getvalue(), dtype=np.uint8)
+        color_image_flag = 1
+        img = cv2.imdecode(data, color_image_flag)
+
+        # resize?
+        cv2.imwrite("tmp.jpg",img) ## hahahaaack
+
+        input_files = "tmp.jpg"
+        images = []
+        with tf.gfile.GFile(input_files, "rb") as f:
+            image = f.read()
+        images.append(image)
+
+        str = server.run_model_on_images(images)
+        success = True
+
+    except Exception as e:
+        print("Exception caught!!!", e)
+
+    end = timer()
+
+    #data['language'] = "eng"
+    #data["success"] = success
+    #data["internal_time"] = end - start
+    #data["str"] = str
+    data[3] = "eng"
+    data[1] = success
+    data[4] = end - start
+    data[2] = str
+
+    print("got all the way before jasonify")
+    r = flask.jsonify(data)
+    print("after it")
+    # return the data dictionary as a JSON response
+    return r
+
 
 @app.route("/evaluate_image", methods=["GET","POST"])
 def evaluate_image():
@@ -150,6 +257,11 @@ def evaluate_image():
     data = {"success": False}
     print("Handshake!")
     try:
+        #print("values",flask.request.values)
+        #print("files",flask.request.files)
+        language = flask.request.values['language']
+        data['language'] = language
+
         uids = []
         imgs_data = []
 
@@ -172,7 +284,7 @@ def evaluate_image():
         with tf.gfile.GFile(input_files, "rb") as f:
             image = f.read()
         images.append(image)
-        print(type(images), type(images[0]))
+        #print(type(images), type(images[0]))
         #print(images)
 
 
