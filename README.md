@@ -8,6 +8,8 @@ Start with:
 
 FLASK_APP=server_runner.py flask run
 
+Useful application for exposing your port to the outside world - ngrok (run with ./ngrok http 5000 by default).
+
 ## installed:
 
 Package              Version  
