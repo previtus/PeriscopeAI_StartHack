@@ -149,11 +149,15 @@ class Server(object):
 @app.route('/speech.wav', methods=['GET', 'POST'])
 def speechwav():
     filename = "speech.wav"
-    return flask.send_from_directory(directory="", filename=filename)
+    return flask.send_from_directory(directory="", filename=filename, cache_timeout=5)
 @app.route('/speech.mp3', methods=['GET', 'POST'])
 def speechmp3():
     filename = "speech.mp3"
-    return flask.send_from_directory(directory="", filename=filename)
+    return flask.send_from_directory(directory="", filename=filename, cache_timeout=5)
+
+@app.route('/speech.f5', methods=['GET', 'POST'])
+def speechwavf5():
+    return flask.send_from_directory(directory="", filename="speech.wav", cache_timeout=5)
 
 @app.route("/handshake", methods=["GET","POST"])
 def handshake():
@@ -392,6 +396,86 @@ def demo_stuffs():
 
     return response
 
+@app.route("/nik", methods=["GET","POST"])
+def nik():
+    print("values", flask.request.values)
+    print("args", flask.request.args)
+    #print("form", flask.request.form)
+    print("data", flask.request.data)
+    print("files", flask.request.files)
+
+
+
+    start = timer()
+    str_description = ""
+    lang_code = "en"
+    success = False
+    try:
+        img_string = flask.request.form['pic']
+        #print("img_string is:", img_string)
+
+        import base64
+        imgdata = base64.b64decode(img_string)
+        #print("imgdata is:", imgdata)
+        filename = 'some_image.jpg'
+        with open(filename, 'wb') as f:
+            f.write(imgdata)
+        print("Got image!")
+
+        input_files = "some_image.jpg"
+        images = []
+        with tf.gfile.GFile(input_files, "rb") as f:
+            image = f.read()
+        images.append(image)
+
+        str_description = server.run_model_on_images(images)
+        success = True
+
+        language_string = flask.request.form['language']
+        lang_list = ["English", "German", "Chinese", "Spanish", "France", "Hindi", "Czech", "Malay", "Italian",
+                     "Japanese"]
+        i = lang_list.index(language_string)
+        languages_array = ["en", "de", "zh", "es", "fr", "hi", "cs", "ms", "it", "ja"]
+        lang_code = languages_array[i]
+        print("We ended up with", lang_code, "from", language_string, "at i=", i)
+
+    except Exception as e:
+        print("Exception caught!!!", e)
+
+    print("Language chosen:", lang_code)
+
+    # language stuffs
+    if lang_code is not "en":
+        translated = translate(str_description, lang_code)
+
+        print("Text translation >", translated)
+
+        translated_text = (translated[0]["translations"][0]["text"])
+        print(translated_text)
+
+        print("Saving audio")
+        texttospeech(translated_text, lang_code)
+
+        str_description = translated_text
+
+    #wav_filepath = "speech.wav"
+    #mp3_filepath = "speech.mp3"
+    #sound = AudioSegment.from_wav(wav_filepath)
+    #sound.export(mp3_filepath, format="mp3")
+
+    end = timer()
+    time = (end - start)
+
+    data = {"success": success, "sentence": str_description, "internal_time": time, "speech": "speech.wav"}
+    return flask.jsonify(data)
+
+    response = flask.make_response(flask.send_file(mp3_filepath))
+    response.headers['Location'] = str ### haaaaaack
+
+    return response
+
+
+    return flask.jsonify(data)
 
 @app.route("/debug", methods=["GET","POST"])
 def debug():
@@ -401,6 +485,16 @@ def debug():
     print("form", flask.request.form)
     print("data", flask.request.data)
     print("files", flask.request.files)
+
+    img_string = flask.request.form['pic']
+    print("img_string is:", img_string)
+
+    import base64
+    imgdata = base64.b64decode(img_string)
+    print("imgdata is:", imgdata)
+    filename = 'some_image.jpg'
+    with open(filename, 'wb') as f:
+        f.write(imgdata)
 
     """
     file = flask.request.files['file']
@@ -431,8 +525,9 @@ def eval_str():
     form = flask.request.form
     print("form: ", form)
 
+
+    lang_code = "de"
     """
-    lang_code = "en"
     try:
         # awfully hacky ~-~-~-~
 
@@ -487,7 +582,7 @@ def eval_str():
     except Exception as e:
         print("Exception caught!!!", e)
 
-    """
+
     # language stuffs
     if lang_code is not "en":
         translated = translate(str, lang_code)
@@ -508,7 +603,7 @@ def eval_str():
     sound.export(mp3_filepath, format="mp3")
 
     #return flask.jsonify(data)
-    """
+
     end = timer()
 
     mp3_filepath = "mini.mp3"

@@ -50,6 +50,7 @@ def texttospeech (text,language):
             self.access_token = str(response.text)
 
         def save_audio(self):
+            print("Saving audio with:",voice2s, person)
             base_url = 'https://westeurope.tts.speech.microsoft.com/'
             path = 'cognitiveservices/v1'
             constructed_url = base_url + path
@@ -79,7 +80,7 @@ def texttospeech (text,language):
 
 
     #if __name__ == "__main__":
-    subscription_key = "ENTER YOUR API KEY HERE"
+    subscription_key = "KEY"
     app = TextToSpeech(subscription_key)
     app.get_token()
     success = app.save_audio()

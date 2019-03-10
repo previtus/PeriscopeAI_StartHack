@@ -11,7 +11,7 @@ def translate(output, language):
 
     # If you want to set your subscription key as a string, uncomment the line
     # below and add your subscription key.
-    subscriptionKey = 'ENTER YOUR API KEY HERE'
+    subscriptionKey = 'KEY'
 
     base_url = 'https://api-eur.cognitive.microsofttranslator.com'
     path = '/translate?api-version=3.0'
