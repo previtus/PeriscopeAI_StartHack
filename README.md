@@ -1,4 +1,4 @@
-# im2txt_flask_server
+# Running backend:
 
 Using these models https://github.com/KranthiGV/Pretrained-Show-and-Tell-model
 
