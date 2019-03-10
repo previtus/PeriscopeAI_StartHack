@@ -1,0 +1,15 @@
+<resources>
+    <string name="app_name">PeriscopeAI</string>
+    <string-array name="languages">
+        <item>English</item>
+        <item>German</item>
+        <item>Chinese</item>
+        <item>Spanish</item>
+        <item>France</item>
+        <item>Hindi</item>
+        <item>Czech</item>
+        <item>Malay</item>
+        <item>Italian</item>
+        <item>Japanese</item>
+    </string-array>
+</resources>
