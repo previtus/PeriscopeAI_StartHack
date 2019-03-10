@@ -149,15 +149,15 @@ class Server(object):
 @app.route('/speech.wav', methods=['GET', 'POST'])
 def speechwav():
     filename = "speech.wav"
-    return flask.send_from_directory(directory="", filename=filename, cache_timeout=5)
+    return flask.send_from_directory(directory="", filename=filename)
 @app.route('/speech.mp3', methods=['GET', 'POST'])
 def speechmp3():
     filename = "speech.mp3"
-    return flask.send_from_directory(directory="", filename=filename, cache_timeout=5)
+    return flask.send_from_directory(directory="", filename=filename)
 
 @app.route('/speech.f5', methods=['GET', 'POST'])
 def speechwavf5():
-    return flask.send_from_directory(directory="", filename="speech.wav", cache_timeout=5)
+    return flask.send_from_directory(directory="", filename="speech.wav")
 
 @app.route("/handshake", methods=["GET","POST"])
 def handshake():
@@ -398,11 +398,11 @@ def demo_stuffs():
 
 @app.route("/nik", methods=["GET","POST"])
 def nik():
-    print("values", flask.request.values)
-    print("args", flask.request.args)
+    #print("values", flask.request.values)
+    #print("args", flask.request.args)
     #print("form", flask.request.form)
-    print("data", flask.request.data)
-    print("files", flask.request.files)
+    #print("data", flask.request.data)
+    #print("files", flask.request.files)
 
 
 
@@ -452,21 +452,23 @@ def nik():
 
         translated_text = (translated[0]["translations"][0]["text"])
         print(translated_text)
-
-        print("Saving audio")
-        texttospeech(translated_text, lang_code)
-
         str_description = translated_text
 
-    #wav_filepath = "speech.wav"
-    #mp3_filepath = "speech.mp3"
-    #sound = AudioSegment.from_wav(wav_filepath)
-    #sound.export(mp3_filepath, format="mp3")
+
+    print("Saving audio")
+    texttospeech(str_description, lang_code)
+
+
+    wav_filepath = "speech.wav"
+    mp3_filepath = "speech.mp3"
+    sound = AudioSegment.from_wav(wav_filepath)
+    sound.export(mp3_filepath, format="mp3")
+    #AudioSegment.from_wav("speech.wav").export("speech.mp3", format="mp3")
 
     end = timer()
     time = (end - start)
 
-    data = {"success": success, "sentence": str_description, "internal_time": time, "speech": "speech.wav"}
+    data = {"success": success, "sentence": str_description, "internal_time": time, "speech": "speech.mp3"}
     return flask.jsonify(data)
 
     response = flask.make_response(flask.send_file(mp3_filepath))
