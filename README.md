@@ -4,11 +4,23 @@ Using these models https://github.com/KranthiGV/Pretrained-Show-and-Tell-model
 
 And a c22611891d0826bbf656a367874489c0dad95777 commit of im2txt from tensorflow models
 
-Start with:
+## instructions:
+
+Start server:
 
 FLASK_APP=server_runner.py flask run
 
-Useful application for exposing your port to the outside world - ngrok (run with ./ngrok http 5000 by default).
+- for experiments outside of localhost - useful application for exposing your port to the outside world - ngrok :
+
+./ngrok http 5000
+
+Run python client:
+
+python client_python.py
+
+or use the app which also connects to the same server
+
+
 
 ## installed:
 
