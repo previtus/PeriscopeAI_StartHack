@@ -4,6 +4,8 @@ import datetime, time
 from threading import Thread
 import requests
 from timeit import default_timer as timer
+import pygame
+
 
 class video_capture(object):
     """
@@ -39,6 +41,8 @@ class renderer(object):
         self.video_capture = video_capture
         self.sample_every = 1 # sec
 
+        self.languages_array = ["en", "de", "zh", "es", "fr", "hi", "cs", "ms", "it", "ja"]
+        self.language_index = 0
 
         return None
 
@@ -54,6 +58,11 @@ class renderer(object):
                 self.sample_every /= 2.0
             if key == ord('0'):
                 self.sample_every *= 2.0
+            if key == ord('i'):
+                self.language_index += 1
+                if self.language_index >= len(self.languages_array):
+                    self.language_index = 0
+                print("Language index set to", self.language_index, self.languages_array[self.language_index])
 
             ret, frame, fps = self.video_capture.get_frame()
 
@@ -78,7 +87,7 @@ class renderer(object):
     def do_cool_beans_here(self, frame):
         PORT = "5000"
         PRED_KERAS_REST_API_URL = "http://localhost:" + PORT + "/python_binding"
-        values = {"language": "zh"} # en, de, zh
+        values = {"language": self.languages_array[self.language_index] } # en, de, zh # + es + fr + hi + cs + ms (malay) + it + jp
 
         print (frame.shape)
 
@@ -93,12 +102,19 @@ class renderer(object):
             payload[str(0)] = image_enc
 
         try:
+            #r = requests.post(PRED_KERAS_REST_API_URL, files=payload, data=values)
             r = requests.post(PRED_KERAS_REST_API_URL, files=payload, data=values).json()
         except Exception as e:
             print("CONNECTION TO SERVER ",PRED_KERAS_REST_API_URL," FAILED - return to backup local evaluation?")
             print("Exception:", e)
 
-        print("request data", r)
+        print("Server says:", r)
+
+        audio = "speech.mp3"
+        pygame.mixer.init()
+        pygame.mixer.music.load(audio)
+        pygame.mixer.music.play()
+
         return True
 
 

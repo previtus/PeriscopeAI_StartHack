@@ -12,6 +12,27 @@ def texttospeech (text,language):
     if language =="zh":
         voice2s = 'zh-CN'
         person = 'HuihuiRUS'
+    if language =="es":
+        voice2s = 'es-ES'
+        person = 'Laura, Apollo'
+    if language =="fr":
+        voice2s = 'fr-CH'
+        person = 'Guillaume'
+    if language =="hi": #hindi
+        voice2s = 'hi-IN'
+        person = 'Kalpana, Apollo'
+    if language =="cs":
+        voice2s = 'cs-CZ'
+        person = 'Jakub'
+    if language =="ms": # malay
+        voice2s = 'ms-MY'
+        person = 'Rizwan'
+    if language =="it":
+        voice2s = 'it-IT'
+        person = 'Cosimo, Apollo'
+    if language =="ja":
+        voice2s = 'ja-JP'
+        person = 'Ichiro, Apollo'
 
     class TextToSpeech(object):
         def __init__(self, subscription_key):
@@ -58,7 +79,7 @@ def texttospeech (text,language):
 
 
     #if __name__ == "__main__":
-    subscription_key = "45a01b98b5e44a46806e71d47265e49c"
+    subscription_key = "ENTER YOUR API KEY HERE"
     app = TextToSpeech(subscription_key)
     app.get_token()
     success = app.save_audio()

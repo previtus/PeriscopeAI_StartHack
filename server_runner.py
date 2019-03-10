@@ -261,11 +261,10 @@ def python_binding():
 
         translated_text = (translated[0]["translations"][0]["text"])
         print(translated_text)
-
-        print("Saving audio")
-        texttospeech(translated_text, lang_code)
-
         str_description = translated_text
+
+    print("Saving audio")
+    texttospeech(str_description, lang_code)
 
     wav_filepath = "speech.wav"
     mp3_filepath = "speech.mp3"
@@ -283,31 +282,16 @@ def python_binding():
 
     data = {"success": success, "str": str_description, "internal_time": time}
 
+    response = flask.make_response(flask.send_file(mp3_filepath))
+    response.headers['Location'] = str_description ### haaaaaack
 
     return flask.jsonify(data)
+    return response
 
 
 
     data = {"success": False}
 
-    print("flask.request.values",flask.request.values)
-    print("flask.request.files",flask.request.files)
-
-    # ensure an image was properly uploaded to our endpoint
-    if flask.request.method == "POST":
-        if flask.request.files.get("image"):
-            # read the image in PIL format
-            print("got image")
-            image = flask.request.files["image"].read()
-            print("image",image)
-            image = Image.open(io.BytesIO(image))
-            print("image", image)
-            # preprocess the image and prepare it for classification
-            image = prepare_image(image, target=(224, 224))
-            print(image.size)
-
-    # return the data dictionary as a JSON response
-    return flask.jsonify(data)
 
     start = timer()
 
